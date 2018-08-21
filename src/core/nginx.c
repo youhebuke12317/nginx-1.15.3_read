@@ -190,7 +190,7 @@ static char        *ngx_signal;
 
 static char **ngx_os_environ;
 
-
+// 参考博客: https://www.cnblogs.com/zhuwbox/p/3983125.html
 int ngx_cdecl
 main(int argc, char *const *argv)
 {
@@ -201,19 +201,30 @@ main(int argc, char *const *argv)
     ngx_conf_dump_t  *cd;
     ngx_core_conf_t  *ccf;
 
+	/* 初始化debug函数 
+	 * */
     ngx_debug_init();
 
+	/* 错误信息字符串初始化 
+	 * 初始化 ngx_str_t  *ngx_sys_errlist 全局变量 
+	 * */
     if (ngx_strerror_init() != NGX_OK) {
         return 1;
     }
 
+	/* 解析命令参数
+	 * */
     if (ngx_get_options(argc, argv) != NGX_OK) {
         return 1;
     }
 
+	/* 显示 nginx 的版本
+	 * */
     if (ngx_show_version) {
         ngx_show_version_info();
 
+		/* 如果需要显示配置文件
+		 * */
         if (!ngx_test_config) {
             return 0;
         }
@@ -221,15 +232,24 @@ main(int argc, char *const *argv)
 
     /* TODO */ ngx_max_sockets = -1;
 
+	/* 初始化并更新时间, 如 全局变量 ngx_cached_time
+	 * */
     ngx_time_init();
 
 #if (NGX_PCRE)
+	/* 如果应用 pcre 库，正则表达式初始化 
+	 * 注册函数指针 
+	 * */
     ngx_regex_init();
 #endif
 
+	/* 获取进程和父进程 ID */
     ngx_pid = ngx_getpid();
     ngx_parent = ngx_getppid();
 
+	/* 日志初始化
+	 * 如 ngx_log, ngx_log_file 全局变量
+	 * */
     log = ngx_log_init(ngx_prefix);
     if (log == NULL) {
         return 1;
@@ -245,23 +265,31 @@ main(int argc, char *const *argv)
      * ngx_process_options()
      */
 
+	/* 清零 init_cycle */
     ngx_memzero(&init_cycle, sizeof(ngx_cycle_t));
-    init_cycle.log = log;
-    ngx_cycle = &init_cycle;
+    init_cycle.log = log;		/* 挂接 log 到 init_cycle */
+    ngx_cycle = &init_cycle;	/* ngx_cycle 全局变量指向 init_cycle */
 
+	/* 为u init_cycle 创建内存池，大小为 1024B */
     init_cycle.pool = ngx_create_pool(1024, log);
     if (init_cycle.pool == NULL) {
         return 1;
     }
-
+	
+	/* 保存命令行参数至全局变量 ngx_os_argv, ngx_argc, ngx_argv 中 */
     if (ngx_save_argv(&init_cycle, argc, argv) != NGX_OK) {
         return 1;
     }
 
+	/* 初始化 ngx_cycle 的 prefix, conf_prefie, conf_file, ngx_argv 中 */
     if (ngx_process_options(&init_cycle) != NGX_OK) {
         return 1;
     }
 
+	/* 初始化系统相关变量
+	 * 如 页面内存大小 ngx_pagesize, ngx_cacheline_size
+	 *    最大连接数 ngx_max_sockets等 
+	 * */
     if (ngx_os_init(log) != NGX_OK) {
         return 1;
     }
@@ -269,7 +297,7 @@ main(int argc, char *const *argv)
     /*
      * ngx_crc32_table_init() requires ngx_cacheline_size set in ngx_os_init()
      */
-
+	/* 初始化 CRC 表---后续的 CRC 校验通过查表进行，效率高 */
     if (ngx_crc32_table_init() != NGX_OK) {
         return 1;
     }
@@ -280,14 +308,21 @@ main(int argc, char *const *argv)
 
     ngx_slab_sizes_init();
 
+	/* 调用 ngx_add_inherited_sockets 继承 sockets
+	 * 将环境变量中的监听端口保存到 init_cycle->listening 数组中去 
+	 * */
     if (ngx_add_inherited_sockets(&init_cycle) != NGX_OK) {
         return 1;
     }
 
+	 /* 处理每个模块的 index 变量 ，并计算 ngx_max_moudle */
     if (ngx_preinit_modules() != NGX_OK) {
         return 1;
     }
 
+	/* 初始化 init_cycle 结构
+	 * 很重要的一个结构体变量，许多东西都保存在这个结构体中 
+	 * */
     cycle = ngx_init_cycle(&init_cycle);
     if (cycle == NULL) {
         if (ngx_test_config) {
@@ -298,6 +333,7 @@ main(int argc, char *const *argv)
         return 1;
     }
 
+	/* 是否开启测试配置文件，开启则测试配置文件 */
     if (ngx_test_config) {
         if (!ngx_quiet_mode) {
             ngx_log_stderr(0, "configuration file %s test is successful",
@@ -324,6 +360,7 @@ main(int argc, char *const *argv)
         return 0;
     }
 
+	/* 若有信号，处理收到的信号 */
     if (ngx_signal) {
         return ngx_signal_process(cycle, ngx_signal);
     }
@@ -332,18 +369,21 @@ main(int argc, char *const *argv)
 
     ngx_cycle = cycle;
 
+	/* 读取 ngx_core_moudle 的配置文件 */
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
 
+	/* 有 master 线程并且 ngx_process 是单 */
     if (ccf->master && ngx_process == NGX_PROCESS_SINGLE) {
         ngx_process = NGX_PROCESS_MASTER;
     }
 
 #if !(NGX_WIN32)
-
+	/* 初始化信号 */
     if (ngx_init_signals(cycle->log) != NGX_OK) {
         return 1;
     }
 
+	/* 若无继承 sockets，且设置了守护进程标识，则调用 ngx_daemon() 创建守护进程 */
     if (!ngx_inherited && ccf->daemon) {
         if (ngx_daemon(cycle->log) != NGX_OK) {
             return 1;
@@ -375,10 +415,14 @@ main(int argc, char *const *argv)
 
     ngx_use_stderr = 0;
 
+	/* 进入主循环 
+	 * */
     if (ngx_process == NGX_PROCESS_SINGLE) {
-        ngx_single_process_cycle(cycle);
+		/* 若为 NGX_PROCESS_SINGLE = 1 模式，则调用 ngx_single_process_cycle() 进入主循环*/
+        ngx_single_process_cycle(cycle);	
 
     } else {
+		/* 否则为 master-worker 模式，调用 ngx_master_process_cycle() 进入主循环*/
         ngx_master_process_cycle(cycle);
     }
 
@@ -391,6 +435,8 @@ ngx_show_version_info(void)
 {
     ngx_write_stderr("nginx version: " NGINX_VER_BUILD NGX_LINEFEED);
 
+	/* 如果需要显示帮助
+	 * */
     if (ngx_show_help) {
         ngx_write_stderr(
             "Usage: nginx [-?hvVtTq] [-s signal] [-c filename] "
@@ -759,38 +805,40 @@ ngx_get_options(int argc, char *const *argv)
 
             case '?':
             case 'h':
-                ngx_show_version = 1;
-                ngx_show_help = 1;
+                ngx_show_version = 1;	/* 显示版本号 */
+                ngx_show_help = 1;		/* 显示帮助 */
                 break;
 
             case 'v':
-                ngx_show_version = 1;
+                ngx_show_version = 1;	/* 显示版本号 */
                 break;
 
             case 'V':
-                ngx_show_version = 1;
-                ngx_show_configure = 1;
+                ngx_show_version = 1;	/* 显示版本号 */
+                ngx_show_configure = 1;	/* 显示配置文件 */
                 break;
 
             case 't':
-                ngx_test_config = 1;
+                ngx_test_config = 1;	/* 只是为了测试配置，如果设置了，nginx 程序到此为止 */
                 break;
 
             case 'T':
-                ngx_test_config = 1;
-                ngx_dump_config = 1;
+                ngx_test_config = 1;	/* 只是为了测试配置，如果设置了，nginx 程序到此为止 */
+                ngx_dump_config = 1;	
                 break;
 
             case 'q':
-                ngx_quiet_mode = 1;
+                ngx_quiet_mode = 1;		/* 测试配置选项时, 不把error级别以下的信息输出到屏幕 */
                 break;
 
-            case 'p':
+            case 'p':		/* 另行制定安装目录启动 */
                 if (*p) {
                     ngx_prefix = p;
                     goto next;
                 }
 
+				/* ngx_prefix 全局变量表示nginx在此目录下读取配置文件
+				 * */
                 if (argv[++i]) {
                     ngx_prefix = (u_char *) argv[i];
                     goto next;
@@ -799,26 +847,30 @@ ngx_get_options(int argc, char *const *argv)
                 ngx_log_stderr(0, "option \"-p\" requires directory name");
                 return NGX_ERROR;
 
-            case 'c':
+            case 'c':		/* 制定配置文件启动 */
                 if (*p) {
                     ngx_conf_file = p;
                     goto next;
                 }
 
+				/* ngx_conf_file 全局变量表示nginx读取的配置文件
+				 * */
                 if (argv[++i]) {
-                    ngx_conf_file = (u_char *) argv[i];
+                    ngx_conf_file = (u_char *) argv[i];	
                     goto next;
                 }
 
                 ngx_log_stderr(0, "option \"-c\" requires file name");
                 return NGX_ERROR;
 
-            case 'g':
+            case 'g':		/* 另行指定全局变量启动 */
                 if (*p) {
                     ngx_conf_params = p;
                     goto next;
                 }
 
+				/* ngx_conf_params 全局变量表示临时的全局变量
+				 * */
                 if (argv[++i]) {
                     ngx_conf_params = (u_char *) argv[i];
                     goto next;

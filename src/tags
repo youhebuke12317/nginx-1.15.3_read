@@ -1984,7 +1984,7 @@ connect_timeout	stream/ngx_stream_proxy_module.c	/^    ngx_msec_t               
 connected	stream/ngx_stream_upstream.h	/^    unsigned                           connected:1;$/;"	m	struct:__anon460
 connection	core/ngx_buf.h	/^    ngx_connection_t            *connection;$/;"	m	struct:__anon3
 connection	core/ngx_connection.h	/^    ngx_connection_t   *connection;$/;"	m	struct:ngx_listening_s
-connection	core/ngx_log.h	/^    ngx_atomic_uint_t    connection;$/;"	m	struct:ngx_log_s
+connection	core/ngx_log.h	/^    ngx_atomic_uint_t    connection;	$/;"	m	struct:ngx_log_s
 connection	event/ngx_event_connect.h	/^    ngx_connection_t                *connection;$/;"	m	struct:ngx_peer_connection_s
 connection	event/ngx_event_openssl.h	/^    ngx_ssl_conn_t             *connection;$/;"	m	struct:ngx_ssl_connection_s
 connection	event/ngx_event_udp.c	/^    ngx_connection_t   *connection;$/;"	m	struct:ngx_udp_connection_s	file:
@@ -2138,7 +2138,7 @@ data	core/ngx_connection.h	/^    void               *data;$/;"	m	struct:ngx_conn
 data	core/ngx_cycle.h	/^    void                     *data;$/;"	m	struct:ngx_shm_zone_s
 data	core/ngx_file.h	/^    void                      *data;$/;"	m	struct:__anon15
 data	core/ngx_file.h	/^    void                      *data;$/;"	m	struct:ngx_tree_ctx_s
-data	core/ngx_log.h	/^    void                *data;$/;"	m	struct:ngx_log_s
+data	core/ngx_log.h	/^    void                *data;				\/* 数据指针 *\/$/;"	m	struct:ngx_log_s
 data	core/ngx_open_file_cache.h	/^    void                    *data;$/;"	m	struct:__anon42
 data	core/ngx_palloc.h	/^    void                 *data;$/;"	m	struct:ngx_pool_cleanup_s
 data	core/ngx_rbtree.h	/^    u_char                 data;$/;"	m	struct:ngx_rbtree_node_s
@@ -2525,7 +2525,7 @@ field_state	http/v2/ngx_http_v2.h	/^    u_char                           field_s
 file	core/ngx_buf.h	/^    ngx_file_t      *file;$/;"	m	struct:ngx_buf_s
 file	core/ngx_conf_file.h	/^    ngx_file_t            file;$/;"	m	struct:__anon4
 file	core/ngx_file.h	/^    ngx_file_t                 file;$/;"	m	struct:__anon17
-file	core/ngx_log.h	/^    ngx_open_file_t     *file;$/;"	m	struct:ngx_log_s
+file	core/ngx_log.h	/^    ngx_open_file_t     *file;				\/* 打开的文件(这也是个结构体) *\/$/;"	m	struct:ngx_log_s
 file	core/ngx_open_file_cache.h	/^    ngx_cached_open_file_t  *file;$/;"	m	struct:__anon41
 file	core/ngx_open_file_cache.h	/^    ngx_cached_open_file_t  *file;$/;"	m	struct:__anon42
 file	core/ngx_thread_pool.c	/^    u_char                   *file;$/;"	m	struct:ngx_thread_pool_s	file:
@@ -2706,7 +2706,7 @@ handle	os/win32/ngx_process.h	/^    HANDLE                  handle;$/;"	m	struct
 handle	os/win32/ngx_shmem.h	/^    HANDLE       handle;$/;"	m	struct:__anon389
 handler	core/ngx_conf_file.h	/^    ngx_conf_handler_pt   handler;$/;"	m	struct:ngx_conf_s
 handler	core/ngx_connection.h	/^    ngx_connection_handler_pt   handler;$/;"	m	struct:ngx_listening_s
-handler	core/ngx_log.h	/^    ngx_log_handler_pt   handler;$/;"	m	struct:ngx_log_s
+handler	core/ngx_log.h	/^    ngx_log_handler_pt   handler;			\/* 回调函数 *\/$/;"	m	struct:ngx_log_s
 handler	core/ngx_palloc.h	/^    ngx_pool_cleanup_pt   handler;$/;"	m	struct:ngx_pool_cleanup_s
 handler	core/ngx_resolver.h	/^    ngx_resolver_handler_pt   handler;$/;"	m	struct:ngx_resolver_ctx_s
 handler	core/ngx_thread_pool.h	/^    void               (*handler)(void *data, ngx_log_t *log);$/;"	m	struct:ngx_thread_task_s
@@ -3291,7 +3291,7 @@ log_error	event/ngx_event_connect.h	/^    unsigned                         log_e
 log_handler	http/ngx_http_request.h	/^    ngx_http_log_handler_pt           log_handler;$/;"	m	struct:ngx_http_request_s
 log_handler	stream/ngx_stream.h	/^    ngx_log_handler_pt             log_handler;$/;"	m	struct:ngx_stream_session_s
 log_level	core/ngx_file.h	/^    unsigned                   log_level:8;$/;"	m	struct:__anon17
-log_level	core/ngx_log.h	/^    ngx_uint_t           log_level;$/;"	m	struct:ngx_log_s
+log_level	core/ngx_log.h	/^    ngx_uint_t           log_level;			\/* 日志等级 *\/$/;"	m	struct:ngx_log_s
 log_level	core/ngx_resolver.h	/^    ngx_uint_t                log_level;$/;"	m	struct:ngx_resolver_s
 log_level	http/modules/ngx_http_limit_conn_module.c	/^    ngx_uint_t                 log_level;$/;"	m	struct:__anon159	file:
 log_level	stream/ngx_stream_limit_conn_module.c	/^    ngx_uint_t                   log_level;$/;"	m	struct:__anon425	file:
