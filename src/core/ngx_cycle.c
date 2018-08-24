@@ -54,6 +54,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_core_module_t   *module;
     char                 hostname[NGX_MAXHOSTNAMELEN];
 
+	// 更新服务器时区和时间
     ngx_timezone_update();
 
     /* force localtime update with a new timezone */
@@ -66,12 +67,14 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
 
     log = old_cycle->log;
 
+	// 创建内存池 此处创建大小为NGX_CYCLE_POOL_SIZE = 16384B 的内存池
     pool = ngx_create_pool(NGX_CYCLE_POOL_SIZE, log);
     if (pool == NULL) {
         return NULL;
     }
     pool->log = log;
 
+	// 在刚创建的内存池里边为ngx_cycle_t分配空间
     cycle = ngx_pcalloc(pool, sizeof(ngx_cycle_t));
     if (cycle == NULL) {
         ngx_destroy_pool(pool);
@@ -113,6 +116,8 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     }
 
 
+	// 初始化pathes数组
+	// 如果旧的cycle对象有路径数组元素的数目, 那么使用原来的, 否则使用默认的10  
     n = old_cycle->paths.nelts ? old_cycle->paths.nelts : 10;
 
     if (ngx_array_init(&cycle->paths, pool, n, sizeof(ngx_path_t *))
@@ -135,6 +140,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_rbtree_init(&cycle->config_dump_rbtree, &cycle->config_dump_sentinel,
                     ngx_str_rbtree_insert_value);
 
+	// 初始化open_files链表
     if (old_cycle->open_files.part.nelts) {
         n = old_cycle->open_files.part.nelts;
         for (part = old_cycle->open_files.part.next; part; part = part->next) {
@@ -153,6 +159,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     }
 
 
+	// 初始化shared_memory链表
     if (old_cycle->shared_memory.part.nelts) {
         n = old_cycle->shared_memory.part.nelts;
         for (part = old_cycle->shared_memory.part.next; part; part = part->next)
@@ -171,6 +178,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         return NULL;
     }
 
+	// 初始化listening数组
     n = old_cycle->listening.nelts ? old_cycle->listening.nelts : 10;
 
     if (ngx_array_init(&cycle->listening, pool, n, sizeof(ngx_listening_t))
@@ -182,17 +190,17 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
 
     ngx_memzero(cycle->listening.elts, n * sizeof(ngx_listening_t));
 
-
+	// 初始化resuable_connections_queue队列
     ngx_queue_init(&cycle->reusable_connections_queue);
 
-
+	//  从pool为conf_ctx分配空间
     cycle->conf_ctx = ngx_pcalloc(pool, ngx_max_module * sizeof(void *));
     if (cycle->conf_ctx == NULL) {
         ngx_destroy_pool(pool);
         return NULL;
     }
 
-
+	//  初始化hostname字符串
     if (gethostname(hostname, NGX_MAXHOSTNAMELEN) == -1) {
         ngx_log_error(NGX_LOG_EMERG, log, ngx_errno, "gethostname() failed");
         ngx_destroy_pool(pool);
@@ -212,13 +220,13 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
 
     ngx_strlow(cycle->hostname.data, (u_char *) hostname, cycle->hostname.len);
 
-
     if (ngx_cycle_modules(cycle) != NGX_OK) {
         ngx_destroy_pool(pool);
         return NULL;
     }
 
-
+	// 调用core模块的create_conf() , 配置存于cycle的conf_ctx数组中
+	// 键值为编译后的核心模块的index编号
     for (i = 0; cycle->modules[i]; i++) {
         if (cycle->modules[i]->type != NGX_CORE_MODULE) {
             continue;
@@ -248,6 +256,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         return NULL;
     }
 
+	// 配置对象的内存池创建
     conf.temp_pool = ngx_create_pool(NGX_CYCLE_POOL_SIZE, log);
     if (conf.temp_pool == NULL) {
         ngx_destroy_pool(pool);
@@ -272,6 +281,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         return NULL;
     }
 
+	// 配置文件解析
     if (ngx_conf_parse(&conf, &cycle->conf_file) != NGX_CONF_OK) {
         environ = senv;
         ngx_destroy_cycle_pools(&conf);
@@ -283,6 +293,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
                        cycle->conf_file.data);
     }
 
+	// 调用core模块的init_conf()
     for (i = 0; cycle->modules[i]; i++) {
         if (cycle->modules[i]->type != NGX_CORE_MODULE) {
             continue;
@@ -353,6 +364,7 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
 
     /* open the new files */
 
+	// 遍历open_files链表中的每一个文件并打开
     part = &cycle->open_files.part;
     file = part->elts;
 

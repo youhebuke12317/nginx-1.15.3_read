@@ -24,12 +24,14 @@ ngx_get_full_name(ngx_pool_t *pool, ngx_str_t *prefix, ngx_str_t *name)
     u_char     *p, *n;
     ngx_int_t   rc;
 
+	// 判断是否是绝对路径
     rc = ngx_test_full_name(name);
 
     if (rc == NGX_OK) {
         return rc;
     }
 
+	/* 不是绝对路径: 做下面操作 */
     len = prefix->len;
 
 #if (NGX_WIN32)

@@ -151,9 +151,12 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
     int                        reuseport;
 #endif
 
+	// 取出cycle->listening数组中的数据地址
     ls = cycle->listening.elts;
+	// 遍历数组
+	// 要记得之前讲过数组当中存放的是ngx_listening_t结构体
     for (i = 0; i < cycle->listening.nelts; i++) {
-
+		// ls的fd已经在之前赋值了 sockaddr分配内存空间
         ls[i].sockaddr = ngx_palloc(cycle->pool, sizeof(ngx_sockaddr_t));
         if (ls[i].sockaddr == NULL) {
             return NGX_ERROR;

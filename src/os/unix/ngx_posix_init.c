@@ -50,8 +50,9 @@ ngx_os_init(ngx_log_t *log)
         return NGX_ERROR;
     }
 
+	// 获取内存分页大小, 单位为Byte
     ngx_pagesize = getpagesize();
-    ngx_cacheline_size = NGX_CPU_CACHE_LINE;
+    ngx_cacheline_size = NGX_CPU_CACHE_LINE;		/* nginx緩存行尺寸的设置 */
 
     for (n = ngx_pagesize; n >>= 1; ngx_pagesize_shift++) { /* void */ }
 
@@ -74,6 +75,7 @@ ngx_os_init(ngx_log_t *log)
 
     ngx_cpuinfo();
 
+	// 获取进程可以打开的最大文件数
     if (getrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
         ngx_log_error(NGX_LOG_ALERT, log, errno,
                       "getrlimit(RLIMIT_NOFILE) failed");

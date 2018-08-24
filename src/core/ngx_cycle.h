@@ -75,7 +75,7 @@ struct ngx_cycle_s {
 
     ngx_cycle_t              *old_cycle;					/* old cycle指针 */
 
-    ngx_str_t                 conf_file;					/* 配置文件 */
+    ngx_str_t                 conf_file;					/* 配置文件: 存储的是绝对路径 */
     ngx_str_t                 conf_param;					/* 配置参数 */
     ngx_str_t                 conf_prefix;					/* 配置前缀 */
     ngx_str_t                 prefix;						/* 前缀 */

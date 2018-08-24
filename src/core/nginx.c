@@ -281,7 +281,7 @@ main(int argc, char *const *argv)
         return 1;
     }
 
-	/* 初始化 ngx_cycle 的 prefix, conf_prefie, conf_file, ngx_argv 中 */
+	/* 初始化 ngx_cycle 的 prefix, conf_prefie, conf_file中 */
     if (ngx_process_options(&init_cycle) != NGX_OK) {
         return 1;
     }
@@ -494,6 +494,9 @@ ngx_show_version_info(void)
 }
 
 
+/* 主要是读取环境变量"NGINX" 将其中各个用分隔符":"or";"的数值，
+ * 保存在ngx_cycel->listening数组中
+ * */
 static ngx_int_t
 ngx_add_inherited_sockets(ngx_cycle_t *cycle)
 {
@@ -501,6 +504,7 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
     ngx_int_t         s;
     ngx_listening_t  *ls;
 
+	// 获取环境变量 这里的"NGINX_VAR"是宏定义，值为"NGINX"
     inherited = (u_char *) getenv(NGINX_VAR);
 
     if (inherited == NULL) {
@@ -510,6 +514,7 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
     ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0,
                   "using inherited sockets from \"%s\"", inherited);
 
+	// 初始化ngx_cycle.listening数组，并且数组中包含10个元素
     if (ngx_array_init(&cycle->listening, cycle->pool, 10,
                        sizeof(ngx_listening_t))
         != NGX_OK)
@@ -517,8 +522,11 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
         return NGX_ERROR;
     }
 
+	// 遍历环境变量
     for (p = inherited, v = p; *p; p++) {
+		// 环境变量的值以':'or';'分开
         if (*p == ':' || *p == ';') {
+			// 转换十进制sockets
             s = ngx_atoi(v, p - v);
             if (s == NGX_ERROR) {
                 ngx_log_error(NGX_LOG_EMERG, cycle->log, 0,
@@ -530,13 +538,14 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
 
             v = p + 1;
 
+			// 返回新分配的数组指针地址
             ls = ngx_array_push(&cycle->listening);
             if (ls == NULL) {
                 return NGX_ERROR;
             }
-
+			// 初始化内存空间
             ngx_memzero(ls, sizeof(ngx_listening_t));
-
+			// 保存socket文件描述符到数组中
             ls->fd = (ngx_socket_t) s;
         }
     }
@@ -547,6 +556,7 @@ ngx_add_inherited_sockets(ngx_cycle_t *cycle)
                       " environment variable, ignoring", v);
     }
 
+	// 表示已经的得到要继承的socket
     ngx_inherited = 1;
 
     return ngx_set_inherited_sockets(cycle);
@@ -970,6 +980,7 @@ ngx_process_options(ngx_cycle_t *cycle)
         len = ngx_strlen(ngx_prefix);
         p = ngx_prefix;
 
+		// ngx_path_separator(c)	判断是绝对路径还是相对路径
         if (len && !ngx_path_separator(p[len - 1])) {
             p = ngx_pnalloc(cycle->pool, len + 1);
             if (p == NULL) {
@@ -1028,10 +1039,12 @@ ngx_process_options(ngx_cycle_t *cycle)
         ngx_str_set(&cycle->conf_file, NGX_CONF_PATH);
     }
 
+	// 将cycle->conf_file存储为绝对路径
     if (ngx_conf_full_name(cycle, &cycle->conf_file, 0) != NGX_OK) {
         return NGX_ERROR;
     }
 
+	// 去掉最后的"/"符号
     for (p = cycle->conf_file.data + cycle->conf_file.len - 1;
          p > cycle->conf_file.data;
          p--)
