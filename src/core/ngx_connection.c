@@ -406,6 +406,11 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
 }
 
 
+/*
+ * @berif	监听绑定cycle中listerning动态数组中指定的相应的端口
+ * @param	cycle	cycle是当前进程的ngx_cycle_t结构体指针
+ * @return	成功返回NGINX_OK, 失败返回NGINX_ERROR
+ * */
 ngx_int_t
 ngx_open_listening_sockets(ngx_cycle_t *cycle)
 {
@@ -712,6 +717,11 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 }
 
 
+/*
+ * @berif	根据nginx.conf中的配置文件设置已经监听的句柄
+ * @param	cycle	cycle是当前进程的ngx_cycle_t结构体指针
+ * @return	无
+ * */
 void
 ngx_configure_listening_sockets(ngx_cycle_t *cycle)
 {
@@ -1020,6 +1030,11 @@ ngx_configure_listening_sockets(ngx_cycle_t *cycle)
 }
 
 
+/*
+ * @berif	关闭cycle中listening动态数组已经打开的句柄
+ * @param	cycle	cycle是当前进程的ngx_cycle_t结构体指针
+ * @return	无
+ * */
 void
 ngx_close_listening_sockets(ngx_cycle_t *cycle)
 {

@@ -70,6 +70,11 @@ static ngx_log_t        ngx_exit_log;
 static ngx_open_file_t  ngx_exit_log_file;
 
 
+/*
+ * @berif	进入master进程的工作循环
+ * @param	cycle 	当前进程的ngx_cycle_t结构体指针
+ * @return	无
+ * */
 void
 ngx_master_process_cycle(ngx_cycle_t *cycle)
 {
@@ -285,6 +290,11 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 }
 
 
+/*
+ * @berif	进入单进程模式(非master、worker进程工作模式)
+ * @param	cycle 	当前进程的ngx_cycle_t结构体指针
+ * @return	无
+ * */
 void
 ngx_single_process_cycle(ngx_cycle_t *cycle)
 {
@@ -342,6 +352,20 @@ ngx_single_process_cycle(ngx_cycle_t *cycle)
 }
 
 
+/**
+ * @Discription : 启动n个子进程, 并设置好每个子进程与master进程之间使用	
+ * 					sockpair系统调用建立起来的socket句柄通信机制
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ * @Parameter : n		启动子进程个数
+ * @Parameter : type	子进程启动方式, 由ngx_process_t结构指出
+ * 					NGX_PROCESS_RESPAWN
+ * 					NGX_PROCESS_NORESPAWN
+ * 					NGX_PROCESS_JUST_SPAWN
+ * 					NGX_PROCESS_JUST_RESPAWN
+ * 					NGX_PROCESS_DETACHED
+ * @return	: 	无
+ */
 static void
 ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
 {
@@ -367,7 +391,15 @@ ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
     }
 }
 
-
+/**
+ * @Discription : 根据文件使用文件缓存模块来决定是否启动cache manage子进程
+ * 					也就是cycle中存储路径的动态数组中是否有路径的manange标志打开
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ * @Parameter : respawn	启动子进程的方式 - 同ngx_start_worker_processes方法中type参数意义相同
+ *
+ * @Return : 无
+ */
 static void
 ngx_start_cache_manager_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
 {
@@ -424,6 +456,12 @@ ngx_start_cache_manager_processes(ngx_cycle_t *cycle, ngx_uint_t respawn)
 }
 
 
+/**
+ * @Discription : 向所有已经打开的channel(通过socketpair生成的句柄进行通信)发送ch信息
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ * @Parameter : ch		向子进程发送的信息
+ */
 static void
 ngx_pass_open_channel(ngx_cycle_t *cycle, ngx_channel_t *ch)
 {
@@ -452,6 +490,12 @@ ngx_pass_open_channel(ngx_cycle_t *cycle, ngx_channel_t *ch)
 }
 
 
+/**
+ * @Discription : 处理worker进程接收到的信号
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ * @Parameter : signo	信号
+ */
 static void
 ngx_signal_worker_processes(ngx_cycle_t *cycle, int signo)
 {
@@ -554,6 +598,14 @@ ngx_signal_worker_processes(ngx_cycle_t *cycle, int signo)
 }
 
 
+/**
+ * @Discription : 检查master进程的所有子进程，
+ * 				根据每个子进程的状态判断是都启动子进程, 更改pid文件
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ *
+ * @Return : 成功返回
+ */
 static ngx_uint_t
 ngx_reap_children(ngx_cycle_t *cycle)
 {
@@ -681,6 +733,11 @@ ngx_reap_children(ngx_cycle_t *cycle)
 }
 
 
+/**
+ * @Discription : 退出master进程工作循环
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ */
 static void
 ngx_master_process_exit(ngx_cycle_t *cycle)
 {
@@ -724,6 +781,12 @@ ngx_master_process_exit(ngx_cycle_t *cycle)
 }
 
 
+/**
+ * @Discription : 进入worker进程工作循环
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针 
+ * @Parameter : data	是使用，一般传NULL
+ */
 static void
 ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
 {
@@ -777,6 +840,12 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
 }
 
 
+/**
+ * @Discription : 进入worker进程工作循环之前的初始化工作
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针 
+ * @Parameter : worker	TODO 进程ID
+ */
 static void
 ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
 {
@@ -974,6 +1043,11 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
 }
 
 
+/**
+ * @Discription : 退出worker进程工作的循环
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针
+ */
 static void
 ngx_worker_process_exit(ngx_cycle_t *cycle)
 {
@@ -1123,6 +1197,12 @@ ngx_channel_handler(ngx_event_t *ev)
 }
 
 
+/**
+ * @Discription : 执行缓存还礼工作的循环方法
+ *
+ * @Parameter : cycle	当前进程的ngx_cycle_t结构体指针   
+ * @Parameter : data	
+ */
 static void
 ngx_cache_manager_process_cycle(ngx_cycle_t *cycle, void *data)
 {

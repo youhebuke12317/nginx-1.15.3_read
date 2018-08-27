@@ -190,6 +190,10 @@ ngx_module_t  ngx_event_core_module = {
 };
 
 
+/**                                                       
+ * @Discription : 使用事件模块处理截止到现在已经收集到的事件，该函数由事件模块实现
+ * @Parameter : cycle   当前进程的ngx_cycle_t结构体指针   
+ * */ 
 void
 ngx_process_events_and_timers(ngx_cycle_t *cycle)
 {

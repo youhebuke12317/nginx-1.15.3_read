@@ -494,8 +494,14 @@ ngx_show_version_info(void)
 }
 
 
-/* 主要是读取环境变量"NGINX" 将其中各个用分隔符":"or";"的数值，
- * 保存在ngx_cycel->listening数组中
+/*  
+ * @berif	主要是读取环境变量"NGINX" 将其中各个用分隔符":"or";"的数值，
+ * 			保存在ngx_cycel->listening数组中
+ * @detail	在不重启服务器升级Nginx的操作时，老的Nginx进程会通过环境变量"NGINX“
+ * 			来传递需要打开的监听描述符，新的Nginx进程会通过ngx_add_inherited_sockets
+ * 			方法来使用已经打开的TCP监听端口
+ * @param	cycle	当前进程的ngx_cycle_t结构体指针
+ * @return	成功返回NGXIN_OK, 失败返回NGINX_ERROR
  * */
 static ngx_int_t
 ngx_add_inherited_sockets(ngx_cycle_t *cycle)
@@ -970,670 +976,676 @@ ngx_save_argv(ngx_cycle_t *cycle, int argc, char *const *argv)
 }
 
 
+/*
+ * @detail	根据运行Nginx时可能携带的目录参数来初始化cycle, 
+ * 			包括完整的运行目录、配置目录, 并生成完整的nginx.conf配置文件路径
+ * @param   cycle	通常是刚刚分配的nginx_cycle_t结构体指针,仅用于传递配置文件路径信息
+ * @return 	成功返回NGINX_OK, 失败返回NGINX_ERROR
+ * */
 static ngx_int_t
 ngx_process_options(ngx_cycle_t *cycle)
 {
-    u_char  *p;
-    size_t   len;
+	u_char  *p;
+	size_t   len;
 
-    if (ngx_prefix) {
-        len = ngx_strlen(ngx_prefix);
-        p = ngx_prefix;
+	if (ngx_prefix) {
+		len = ngx_strlen(ngx_prefix);
+		p = ngx_prefix;
 
 		// ngx_path_separator(c)	判断是绝对路径还是相对路径
-        if (len && !ngx_path_separator(p[len - 1])) {
-            p = ngx_pnalloc(cycle->pool, len + 1);
-            if (p == NULL) {
-                return NGX_ERROR;
-            }
+		if (len && !ngx_path_separator(p[len - 1])) {
+			p = ngx_pnalloc(cycle->pool, len + 1);
+			if (p == NULL) {
+				return NGX_ERROR;
+			}
 
-            ngx_memcpy(p, ngx_prefix, len);
-            p[len++] = '/';
-        }
+			ngx_memcpy(p, ngx_prefix, len);
+			p[len++] = '/';
+		}
 
-        cycle->conf_prefix.len = len;
-        cycle->conf_prefix.data = p;
-        cycle->prefix.len = len;
-        cycle->prefix.data = p;
+		cycle->conf_prefix.len = len;
+		cycle->conf_prefix.data = p;
+		cycle->prefix.len = len;
+		cycle->prefix.data = p;
 
-    } else {
+	} else {
 
 #ifndef NGX_PREFIX
 
-        p = ngx_pnalloc(cycle->pool, NGX_MAX_PATH);
-        if (p == NULL) {
-            return NGX_ERROR;
-        }
+		p = ngx_pnalloc(cycle->pool, NGX_MAX_PATH);
+		if (p == NULL) {
+			return NGX_ERROR;
+		}
 
-        if (ngx_getcwd(p, NGX_MAX_PATH) == 0) {
-            ngx_log_stderr(ngx_errno, "[emerg]: " ngx_getcwd_n " failed");
-            return NGX_ERROR;
-        }
+		if (ngx_getcwd(p, NGX_MAX_PATH) == 0) {
+			ngx_log_stderr(ngx_errno, "[emerg]: " ngx_getcwd_n " failed");
+			return NGX_ERROR;
+		}
 
-        len = ngx_strlen(p);
+		len = ngx_strlen(p);
 
-        p[len++] = '/';
+		p[len++] = '/';
 
-        cycle->conf_prefix.len = len;
-        cycle->conf_prefix.data = p;
-        cycle->prefix.len = len;
-        cycle->prefix.data = p;
+		cycle->conf_prefix.len = len;
+		cycle->conf_prefix.data = p;
+		cycle->prefix.len = len;
+		cycle->prefix.data = p;
 
 #else
 
 #ifdef NGX_CONF_PREFIX
-        ngx_str_set(&cycle->conf_prefix, NGX_CONF_PREFIX);
+		ngx_str_set(&cycle->conf_prefix, NGX_CONF_PREFIX);
 #else
-        ngx_str_set(&cycle->conf_prefix, NGX_PREFIX);
+		ngx_str_set(&cycle->conf_prefix, NGX_PREFIX);
 #endif
-        ngx_str_set(&cycle->prefix, NGX_PREFIX);
+		ngx_str_set(&cycle->prefix, NGX_PREFIX);
 
 #endif
-    }
+	}
 
-    if (ngx_conf_file) {
-        cycle->conf_file.len = ngx_strlen(ngx_conf_file);
-        cycle->conf_file.data = ngx_conf_file;
+	if (ngx_conf_file) {
+		cycle->conf_file.len = ngx_strlen(ngx_conf_file);
+		cycle->conf_file.data = ngx_conf_file;
 
-    } else {
-        ngx_str_set(&cycle->conf_file, NGX_CONF_PATH);
-    }
+	} else {
+		ngx_str_set(&cycle->conf_file, NGX_CONF_PATH);
+	}
 
 	// 将cycle->conf_file存储为绝对路径
-    if (ngx_conf_full_name(cycle, &cycle->conf_file, 0) != NGX_OK) {
-        return NGX_ERROR;
-    }
+	if (ngx_conf_full_name(cycle, &cycle->conf_file, 0) != NGX_OK) {
+		return NGX_ERROR;
+	}
 
 	// 去掉最后的"/"符号
-    for (p = cycle->conf_file.data + cycle->conf_file.len - 1;
-         p > cycle->conf_file.data;
-         p--)
-    {
-        if (ngx_path_separator(*p)) {
-            cycle->conf_prefix.len = p - cycle->conf_file.data + 1;
-            cycle->conf_prefix.data = cycle->conf_file.data;
-            break;
-        }
-    }
+	for (p = cycle->conf_file.data + cycle->conf_file.len - 1;
+			p > cycle->conf_file.data;
+			p--)
+	{
+		if (ngx_path_separator(*p)) {
+			cycle->conf_prefix.len = p - cycle->conf_file.data + 1;
+			cycle->conf_prefix.data = cycle->conf_file.data;
+			break;
+		}
+	}
 
-    if (ngx_conf_params) {
-        cycle->conf_param.len = ngx_strlen(ngx_conf_params);
-        cycle->conf_param.data = ngx_conf_params;
-    }
+	if (ngx_conf_params) {
+		cycle->conf_param.len = ngx_strlen(ngx_conf_params);
+		cycle->conf_param.data = ngx_conf_params;
+	}
 
-    if (ngx_test_config) {
-        cycle->log->log_level = NGX_LOG_INFO;
-    }
+	if (ngx_test_config) {
+		cycle->log->log_level = NGX_LOG_INFO;
+	}
 
-    return NGX_OK;
+	return NGX_OK;
 }
 
 
-static void *
+	static void *
 ngx_core_module_create_conf(ngx_cycle_t *cycle)
 {
-    ngx_core_conf_t  *ccf;
+	ngx_core_conf_t  *ccf;
 
-    ccf = ngx_pcalloc(cycle->pool, sizeof(ngx_core_conf_t));
-    if (ccf == NULL) {
-        return NULL;
-    }
+	ccf = ngx_pcalloc(cycle->pool, sizeof(ngx_core_conf_t));
+	if (ccf == NULL) {
+		return NULL;
+	}
 
-    /*
-     * set by ngx_pcalloc()
-     *
-     *     ccf->pid = NULL;
-     *     ccf->oldpid = NULL;
-     *     ccf->priority = 0;
-     *     ccf->cpu_affinity_auto = 0;
-     *     ccf->cpu_affinity_n = 0;
-     *     ccf->cpu_affinity = NULL;
-     */
+	/*
+	 * set by ngx_pcalloc()
+	 *
+	 *     ccf->pid = NULL;
+	 *     ccf->oldpid = NULL;
+	 *     ccf->priority = 0;
+	 *     ccf->cpu_affinity_auto = 0;
+	 *     ccf->cpu_affinity_n = 0;
+	 *     ccf->cpu_affinity = NULL;
+	 */
 
-    ccf->daemon = NGX_CONF_UNSET;
-    ccf->master = NGX_CONF_UNSET;
-    ccf->timer_resolution = NGX_CONF_UNSET_MSEC;
-    ccf->shutdown_timeout = NGX_CONF_UNSET_MSEC;
+	ccf->daemon = NGX_CONF_UNSET;
+	ccf->master = NGX_CONF_UNSET;
+	ccf->timer_resolution = NGX_CONF_UNSET_MSEC;
+	ccf->shutdown_timeout = NGX_CONF_UNSET_MSEC;
 
-    ccf->worker_processes = NGX_CONF_UNSET;
-    ccf->debug_points = NGX_CONF_UNSET;
+	ccf->worker_processes = NGX_CONF_UNSET;
+	ccf->debug_points = NGX_CONF_UNSET;
 
-    ccf->rlimit_nofile = NGX_CONF_UNSET;
-    ccf->rlimit_core = NGX_CONF_UNSET;
+	ccf->rlimit_nofile = NGX_CONF_UNSET;
+	ccf->rlimit_core = NGX_CONF_UNSET;
 
-    ccf->user = (ngx_uid_t) NGX_CONF_UNSET_UINT;
-    ccf->group = (ngx_gid_t) NGX_CONF_UNSET_UINT;
+	ccf->user = (ngx_uid_t) NGX_CONF_UNSET_UINT;
+	ccf->group = (ngx_gid_t) NGX_CONF_UNSET_UINT;
 
-    if (ngx_array_init(&ccf->env, cycle->pool, 1, sizeof(ngx_str_t))
-        != NGX_OK)
-    {
-        return NULL;
-    }
+	if (ngx_array_init(&ccf->env, cycle->pool, 1, sizeof(ngx_str_t))
+			!= NGX_OK)
+	{
+		return NULL;
+	}
 
-    return ccf;
+	return ccf;
 }
 
 
-static char *
+	static char *
 ngx_core_module_init_conf(ngx_cycle_t *cycle, void *conf)
 {
-    ngx_core_conf_t  *ccf = conf;
+	ngx_core_conf_t  *ccf = conf;
 
-    ngx_conf_init_value(ccf->daemon, 1);
-    ngx_conf_init_value(ccf->master, 1);
-    ngx_conf_init_msec_value(ccf->timer_resolution, 0);
-    ngx_conf_init_msec_value(ccf->shutdown_timeout, 0);
+	ngx_conf_init_value(ccf->daemon, 1);
+	ngx_conf_init_value(ccf->master, 1);
+	ngx_conf_init_msec_value(ccf->timer_resolution, 0);
+	ngx_conf_init_msec_value(ccf->shutdown_timeout, 0);
 
-    ngx_conf_init_value(ccf->worker_processes, 1);
-    ngx_conf_init_value(ccf->debug_points, 0);
+	ngx_conf_init_value(ccf->worker_processes, 1);
+	ngx_conf_init_value(ccf->debug_points, 0);
 
 #if (NGX_HAVE_CPU_AFFINITY)
 
-    if (!ccf->cpu_affinity_auto
-        && ccf->cpu_affinity_n
-        && ccf->cpu_affinity_n != 1
-        && ccf->cpu_affinity_n != (ngx_uint_t) ccf->worker_processes)
-    {
-        ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
-                      "the number of \"worker_processes\" is not equal to "
-                      "the number of \"worker_cpu_affinity\" masks, "
-                      "using last mask for remaining worker processes");
-    }
+	if (!ccf->cpu_affinity_auto
+			&& ccf->cpu_affinity_n
+			&& ccf->cpu_affinity_n != 1
+			&& ccf->cpu_affinity_n != (ngx_uint_t) ccf->worker_processes)
+	{
+		ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
+				"the number of \"worker_processes\" is not equal to "
+				"the number of \"worker_cpu_affinity\" masks, "
+				"using last mask for remaining worker processes");
+	}
 
 #endif
 
 
-    if (ccf->pid.len == 0) {
-        ngx_str_set(&ccf->pid, NGX_PID_PATH);
-    }
+	if (ccf->pid.len == 0) {
+		ngx_str_set(&ccf->pid, NGX_PID_PATH);
+	}
 
-    if (ngx_conf_full_name(cycle, &ccf->pid, 0) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
+	if (ngx_conf_full_name(cycle, &ccf->pid, 0) != NGX_OK) {
+		return NGX_CONF_ERROR;
+	}
 
-    ccf->oldpid.len = ccf->pid.len + sizeof(NGX_OLDPID_EXT);
+	ccf->oldpid.len = ccf->pid.len + sizeof(NGX_OLDPID_EXT);
 
-    ccf->oldpid.data = ngx_pnalloc(cycle->pool, ccf->oldpid.len);
-    if (ccf->oldpid.data == NULL) {
-        return NGX_CONF_ERROR;
-    }
+	ccf->oldpid.data = ngx_pnalloc(cycle->pool, ccf->oldpid.len);
+	if (ccf->oldpid.data == NULL) {
+		return NGX_CONF_ERROR;
+	}
 
-    ngx_memcpy(ngx_cpymem(ccf->oldpid.data, ccf->pid.data, ccf->pid.len),
-               NGX_OLDPID_EXT, sizeof(NGX_OLDPID_EXT));
+	ngx_memcpy(ngx_cpymem(ccf->oldpid.data, ccf->pid.data, ccf->pid.len),
+			NGX_OLDPID_EXT, sizeof(NGX_OLDPID_EXT));
 
 
 #if !(NGX_WIN32)
 
-    if (ccf->user == (uid_t) NGX_CONF_UNSET_UINT && geteuid() == 0) {
-        struct group   *grp;
-        struct passwd  *pwd;
+	if (ccf->user == (uid_t) NGX_CONF_UNSET_UINT && geteuid() == 0) {
+		struct group   *grp;
+		struct passwd  *pwd;
 
-        ngx_set_errno(0);
-        pwd = getpwnam(NGX_USER);
-        if (pwd == NULL) {
-            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
-                          "getpwnam(\"" NGX_USER "\") failed");
-            return NGX_CONF_ERROR;
-        }
+		ngx_set_errno(0);
+		pwd = getpwnam(NGX_USER);
+		if (pwd == NULL) {
+			ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+					"getpwnam(\"" NGX_USER "\") failed");
+			return NGX_CONF_ERROR;
+		}
 
-        ccf->username = NGX_USER;
-        ccf->user = pwd->pw_uid;
+		ccf->username = NGX_USER;
+		ccf->user = pwd->pw_uid;
 
-        ngx_set_errno(0);
-        grp = getgrnam(NGX_GROUP);
-        if (grp == NULL) {
-            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
-                          "getgrnam(\"" NGX_GROUP "\") failed");
-            return NGX_CONF_ERROR;
-        }
+		ngx_set_errno(0);
+		grp = getgrnam(NGX_GROUP);
+		if (grp == NULL) {
+			ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+					"getgrnam(\"" NGX_GROUP "\") failed");
+			return NGX_CONF_ERROR;
+		}
 
-        ccf->group = grp->gr_gid;
-    }
+		ccf->group = grp->gr_gid;
+	}
 
 
-    if (ccf->lock_file.len == 0) {
-        ngx_str_set(&ccf->lock_file, NGX_LOCK_PATH);
-    }
+	if (ccf->lock_file.len == 0) {
+		ngx_str_set(&ccf->lock_file, NGX_LOCK_PATH);
+	}
 
-    if (ngx_conf_full_name(cycle, &ccf->lock_file, 0) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
+	if (ngx_conf_full_name(cycle, &ccf->lock_file, 0) != NGX_OK) {
+		return NGX_CONF_ERROR;
+	}
 
-    {
-    ngx_str_t  lock_file;
+	{
+		ngx_str_t  lock_file;
 
-    lock_file = cycle->old_cycle->lock_file;
+		lock_file = cycle->old_cycle->lock_file;
 
-    if (lock_file.len) {
-        lock_file.len--;
+		if (lock_file.len) {
+			lock_file.len--;
 
-        if (ccf->lock_file.len != lock_file.len
-            || ngx_strncmp(ccf->lock_file.data, lock_file.data, lock_file.len)
-               != 0)
-        {
-            ngx_log_error(NGX_LOG_EMERG, cycle->log, 0,
-                          "\"lock_file\" could not be changed, ignored");
-        }
+			if (ccf->lock_file.len != lock_file.len
+					|| ngx_strncmp(ccf->lock_file.data, lock_file.data, lock_file.len)
+					!= 0)
+			{
+				ngx_log_error(NGX_LOG_EMERG, cycle->log, 0,
+						"\"lock_file\" could not be changed, ignored");
+			}
 
-        cycle->lock_file.len = lock_file.len + 1;
-        lock_file.len += sizeof(".accept");
+			cycle->lock_file.len = lock_file.len + 1;
+			lock_file.len += sizeof(".accept");
 
-        cycle->lock_file.data = ngx_pstrdup(cycle->pool, &lock_file);
-        if (cycle->lock_file.data == NULL) {
-            return NGX_CONF_ERROR;
-        }
+			cycle->lock_file.data = ngx_pstrdup(cycle->pool, &lock_file);
+			if (cycle->lock_file.data == NULL) {
+				return NGX_CONF_ERROR;
+			}
 
-    } else {
-        cycle->lock_file.len = ccf->lock_file.len + 1;
-        cycle->lock_file.data = ngx_pnalloc(cycle->pool,
-                                      ccf->lock_file.len + sizeof(".accept"));
-        if (cycle->lock_file.data == NULL) {
-            return NGX_CONF_ERROR;
-        }
+		} else {
+			cycle->lock_file.len = ccf->lock_file.len + 1;
+			cycle->lock_file.data = ngx_pnalloc(cycle->pool,
+					ccf->lock_file.len + sizeof(".accept"));
+			if (cycle->lock_file.data == NULL) {
+				return NGX_CONF_ERROR;
+			}
 
-        ngx_memcpy(ngx_cpymem(cycle->lock_file.data, ccf->lock_file.data,
-                              ccf->lock_file.len),
-                   ".accept", sizeof(".accept"));
-    }
-    }
+			ngx_memcpy(ngx_cpymem(cycle->lock_file.data, ccf->lock_file.data,
+						ccf->lock_file.len),
+					".accept", sizeof(".accept"));
+		}
+	}
 
 #endif
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 }
 
 
-static char *
+	static char *
 ngx_set_user(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 #if (NGX_WIN32)
 
-    ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
-                       "\"user\" is not supported, ignored");
+	ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
+			"\"user\" is not supported, ignored");
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 
 #else
 
-    ngx_core_conf_t  *ccf = conf;
+	ngx_core_conf_t  *ccf = conf;
 
-    char             *group;
-    struct passwd    *pwd;
-    struct group     *grp;
-    ngx_str_t        *value;
+	char             *group;
+	struct passwd    *pwd;
+	struct group     *grp;
+	ngx_str_t        *value;
 
-    if (ccf->user != (uid_t) NGX_CONF_UNSET_UINT) {
-        return "is duplicate";
-    }
+	if (ccf->user != (uid_t) NGX_CONF_UNSET_UINT) {
+		return "is duplicate";
+	}
 
-    if (geteuid() != 0) {
-        ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
-                           "the \"user\" directive makes sense only "
-                           "if the master process runs "
-                           "with super-user privileges, ignored");
-        return NGX_CONF_OK;
-    }
+	if (geteuid() != 0) {
+		ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
+				"the \"user\" directive makes sense only "
+				"if the master process runs "
+				"with super-user privileges, ignored");
+		return NGX_CONF_OK;
+	}
 
-    value = cf->args->elts;
+	value = cf->args->elts;
 
-    ccf->username = (char *) value[1].data;
+	ccf->username = (char *) value[1].data;
 
-    ngx_set_errno(0);
-    pwd = getpwnam((const char *) value[1].data);
-    if (pwd == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
-                           "getpwnam(\"%s\") failed", value[1].data);
-        return NGX_CONF_ERROR;
-    }
+	ngx_set_errno(0);
+	pwd = getpwnam((const char *) value[1].data);
+	if (pwd == NULL) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+				"getpwnam(\"%s\") failed", value[1].data);
+		return NGX_CONF_ERROR;
+	}
 
-    ccf->user = pwd->pw_uid;
+	ccf->user = pwd->pw_uid;
 
-    group = (char *) ((cf->args->nelts == 2) ? value[1].data : value[2].data);
+	group = (char *) ((cf->args->nelts == 2) ? value[1].data : value[2].data);
 
-    ngx_set_errno(0);
-    grp = getgrnam(group);
-    if (grp == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
-                           "getgrnam(\"%s\") failed", group);
-        return NGX_CONF_ERROR;
-    }
+	ngx_set_errno(0);
+	grp = getgrnam(group);
+	if (grp == NULL) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+				"getgrnam(\"%s\") failed", group);
+		return NGX_CONF_ERROR;
+	}
 
-    ccf->group = grp->gr_gid;
+	ccf->group = grp->gr_gid;
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 
 #endif
 }
 
 
-static char *
+	static char *
 ngx_set_env(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_core_conf_t  *ccf = conf;
+	ngx_core_conf_t  *ccf = conf;
 
-    ngx_str_t   *value, *var;
-    ngx_uint_t   i;
+	ngx_str_t   *value, *var;
+	ngx_uint_t   i;
 
-    var = ngx_array_push(&ccf->env);
-    if (var == NULL) {
-        return NGX_CONF_ERROR;
-    }
+	var = ngx_array_push(&ccf->env);
+	if (var == NULL) {
+		return NGX_CONF_ERROR;
+	}
 
-    value = cf->args->elts;
-    *var = value[1];
+	value = cf->args->elts;
+	*var = value[1];
 
-    for (i = 0; i < value[1].len; i++) {
+	for (i = 0; i < value[1].len; i++) {
 
-        if (value[1].data[i] == '=') {
+		if (value[1].data[i] == '=') {
 
-            var->len = i;
+			var->len = i;
 
-            return NGX_CONF_OK;
-        }
-    }
+			return NGX_CONF_OK;
+		}
+	}
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 }
 
 
-static char *
+	static char *
 ngx_set_priority(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_core_conf_t  *ccf = conf;
+	ngx_core_conf_t  *ccf = conf;
 
-    ngx_str_t        *value;
-    ngx_uint_t        n, minus;
+	ngx_str_t        *value;
+	ngx_uint_t        n, minus;
 
-    if (ccf->priority != 0) {
-        return "is duplicate";
-    }
+	if (ccf->priority != 0) {
+		return "is duplicate";
+	}
 
-    value = cf->args->elts;
+	value = cf->args->elts;
 
-    if (value[1].data[0] == '-') {
-        n = 1;
-        minus = 1;
+	if (value[1].data[0] == '-') {
+		n = 1;
+		minus = 1;
 
-    } else if (value[1].data[0] == '+') {
-        n = 1;
-        minus = 0;
+	} else if (value[1].data[0] == '+') {
+		n = 1;
+		minus = 0;
 
-    } else {
-        n = 0;
-        minus = 0;
-    }
+	} else {
+		n = 0;
+		minus = 0;
+	}
 
-    ccf->priority = ngx_atoi(&value[1].data[n], value[1].len - n);
-    if (ccf->priority == NGX_ERROR) {
-        return "invalid number";
-    }
+	ccf->priority = ngx_atoi(&value[1].data[n], value[1].len - n);
+	if (ccf->priority == NGX_ERROR) {
+		return "invalid number";
+	}
 
-    if (minus) {
-        ccf->priority = -ccf->priority;
-    }
+	if (minus) {
+		ccf->priority = -ccf->priority;
+	}
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 }
 
 
-static char *
+	static char *
 ngx_set_cpu_affinity(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 #if (NGX_HAVE_CPU_AFFINITY)
-    ngx_core_conf_t  *ccf = conf;
+	ngx_core_conf_t  *ccf = conf;
 
-    u_char            ch, *p;
-    ngx_str_t        *value;
-    ngx_uint_t        i, n;
-    ngx_cpuset_t     *mask;
+	u_char            ch, *p;
+	ngx_str_t        *value;
+	ngx_uint_t        i, n;
+	ngx_cpuset_t     *mask;
 
-    if (ccf->cpu_affinity) {
-        return "is duplicate";
-    }
+	if (ccf->cpu_affinity) {
+		return "is duplicate";
+	}
 
-    mask = ngx_palloc(cf->pool, (cf->args->nelts - 1) * sizeof(ngx_cpuset_t));
-    if (mask == NULL) {
-        return NGX_CONF_ERROR;
-    }
+	mask = ngx_palloc(cf->pool, (cf->args->nelts - 1) * sizeof(ngx_cpuset_t));
+	if (mask == NULL) {
+		return NGX_CONF_ERROR;
+	}
 
-    ccf->cpu_affinity_n = cf->args->nelts - 1;
-    ccf->cpu_affinity = mask;
+	ccf->cpu_affinity_n = cf->args->nelts - 1;
+	ccf->cpu_affinity = mask;
 
-    value = cf->args->elts;
+	value = cf->args->elts;
 
-    if (ngx_strcmp(value[1].data, "auto") == 0) {
+	if (ngx_strcmp(value[1].data, "auto") == 0) {
 
-        if (cf->args->nelts > 3) {
-            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                               "invalid number of arguments in "
-                               "\"worker_cpu_affinity\" directive");
-            return NGX_CONF_ERROR;
-        }
+		if (cf->args->nelts > 3) {
+			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+					"invalid number of arguments in "
+					"\"worker_cpu_affinity\" directive");
+			return NGX_CONF_ERROR;
+		}
 
-        ccf->cpu_affinity_auto = 1;
+		ccf->cpu_affinity_auto = 1;
 
-        CPU_ZERO(&mask[0]);
-        for (i = 0; i < (ngx_uint_t) ngx_min(ngx_ncpu, CPU_SETSIZE); i++) {
-            CPU_SET(i, &mask[0]);
-        }
+		CPU_ZERO(&mask[0]);
+		for (i = 0; i < (ngx_uint_t) ngx_min(ngx_ncpu, CPU_SETSIZE); i++) {
+			CPU_SET(i, &mask[0]);
+		}
 
-        n = 2;
+		n = 2;
 
-    } else {
-        n = 1;
-    }
+	} else {
+		n = 1;
+	}
 
-    for ( /* void */ ; n < cf->args->nelts; n++) {
+	for ( /* void */ ; n < cf->args->nelts; n++) {
 
-        if (value[n].len > CPU_SETSIZE) {
-            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                         "\"worker_cpu_affinity\" supports up to %d CPUs only",
-                         CPU_SETSIZE);
-            return NGX_CONF_ERROR;
-        }
+		if (value[n].len > CPU_SETSIZE) {
+			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+					"\"worker_cpu_affinity\" supports up to %d CPUs only",
+					CPU_SETSIZE);
+			return NGX_CONF_ERROR;
+		}
 
-        i = 0;
-        CPU_ZERO(&mask[n - 1]);
+		i = 0;
+		CPU_ZERO(&mask[n - 1]);
 
-        for (p = value[n].data + value[n].len - 1;
-             p >= value[n].data;
-             p--)
-        {
-            ch = *p;
+		for (p = value[n].data + value[n].len - 1;
+				p >= value[n].data;
+				p--)
+		{
+			ch = *p;
 
-            if (ch == ' ') {
-                continue;
-            }
+			if (ch == ' ') {
+				continue;
+			}
 
-            i++;
+			i++;
 
-            if (ch == '0') {
-                continue;
-            }
+			if (ch == '0') {
+				continue;
+			}
 
-            if (ch == '1') {
-                CPU_SET(i - 1, &mask[n - 1]);
-                continue;
-            }
+			if (ch == '1') {
+				CPU_SET(i - 1, &mask[n - 1]);
+				continue;
+			}
 
-            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                          "invalid character \"%c\" in \"worker_cpu_affinity\"",
-                          ch);
-            return NGX_CONF_ERROR;
-        }
-    }
+			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+					"invalid character \"%c\" in \"worker_cpu_affinity\"",
+					ch);
+			return NGX_CONF_ERROR;
+		}
+	}
 
 #else
 
-    ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
-                       "\"worker_cpu_affinity\" is not supported "
-                       "on this platform, ignored");
+	ngx_conf_log_error(NGX_LOG_WARN, cf, 0,
+			"\"worker_cpu_affinity\" is not supported "
+			"on this platform, ignored");
 #endif
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 }
 
 
-ngx_cpuset_t *
+	ngx_cpuset_t *
 ngx_get_cpu_affinity(ngx_uint_t n)
 {
 #if (NGX_HAVE_CPU_AFFINITY)
-    ngx_uint_t        i, j;
-    ngx_cpuset_t     *mask;
-    ngx_core_conf_t  *ccf;
+	ngx_uint_t        i, j;
+	ngx_cpuset_t     *mask;
+	ngx_core_conf_t  *ccf;
 
-    static ngx_cpuset_t  result;
+	static ngx_cpuset_t  result;
 
-    ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
-                                           ngx_core_module);
+	ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
+			ngx_core_module);
 
-    if (ccf->cpu_affinity == NULL) {
-        return NULL;
-    }
+	if (ccf->cpu_affinity == NULL) {
+		return NULL;
+	}
 
-    if (ccf->cpu_affinity_auto) {
-        mask = &ccf->cpu_affinity[ccf->cpu_affinity_n - 1];
+	if (ccf->cpu_affinity_auto) {
+		mask = &ccf->cpu_affinity[ccf->cpu_affinity_n - 1];
 
-        for (i = 0, j = n; /* void */ ; i++) {
+		for (i = 0, j = n; /* void */ ; i++) {
 
-            if (CPU_ISSET(i % CPU_SETSIZE, mask) && j-- == 0) {
-                break;
-            }
+			if (CPU_ISSET(i % CPU_SETSIZE, mask) && j-- == 0) {
+				break;
+			}
 
-            if (i == CPU_SETSIZE && j == n) {
-                /* empty mask */
-                return NULL;
-            }
+			if (i == CPU_SETSIZE && j == n) {
+				/* empty mask */
+				return NULL;
+			}
 
-            /* void */
-        }
+			/* void */
+		}
 
-        CPU_ZERO(&result);
-        CPU_SET(i % CPU_SETSIZE, &result);
+		CPU_ZERO(&result);
+		CPU_SET(i % CPU_SETSIZE, &result);
 
-        return &result;
-    }
+		return &result;
+	}
 
-    if (ccf->cpu_affinity_n > n) {
-        return &ccf->cpu_affinity[n];
-    }
+	if (ccf->cpu_affinity_n > n) {
+		return &ccf->cpu_affinity[n];
+	}
 
-    return &ccf->cpu_affinity[ccf->cpu_affinity_n - 1];
+	return &ccf->cpu_affinity[ccf->cpu_affinity_n - 1];
 
 #else
 
-    return NULL;
+	return NULL;
 
 #endif
 }
 
 
-static char *
+	static char *
 ngx_set_worker_processes(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_str_t        *value;
-    ngx_core_conf_t  *ccf;
+	ngx_str_t        *value;
+	ngx_core_conf_t  *ccf;
 
-    ccf = (ngx_core_conf_t *) conf;
+	ccf = (ngx_core_conf_t *) conf;
 
-    if (ccf->worker_processes != NGX_CONF_UNSET) {
-        return "is duplicate";
-    }
+	if (ccf->worker_processes != NGX_CONF_UNSET) {
+		return "is duplicate";
+	}
 
-    value = cf->args->elts;
+	value = cf->args->elts;
 
-    if (ngx_strcmp(value[1].data, "auto") == 0) {
-        ccf->worker_processes = ngx_ncpu;
-        return NGX_CONF_OK;
-    }
+	if (ngx_strcmp(value[1].data, "auto") == 0) {
+		ccf->worker_processes = ngx_ncpu;
+		return NGX_CONF_OK;
+	}
 
-    ccf->worker_processes = ngx_atoi(value[1].data, value[1].len);
+	ccf->worker_processes = ngx_atoi(value[1].data, value[1].len);
 
-    if (ccf->worker_processes == NGX_ERROR) {
-        return "invalid value";
-    }
+	if (ccf->worker_processes == NGX_ERROR) {
+		return "invalid value";
+	}
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 }
 
 
-static char *
+	static char *
 ngx_load_module(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 #if (NGX_HAVE_DLOPEN)
-    void                *handle;
-    char               **names, **order;
-    ngx_str_t           *value, file;
-    ngx_uint_t           i;
-    ngx_module_t        *module, **modules;
-    ngx_pool_cleanup_t  *cln;
+	void                *handle;
+	char               **names, **order;
+	ngx_str_t           *value, file;
+	ngx_uint_t           i;
+	ngx_module_t        *module, **modules;
+	ngx_pool_cleanup_t  *cln;
 
-    if (cf->cycle->modules_used) {
-        return "is specified too late";
-    }
+	if (cf->cycle->modules_used) {
+		return "is specified too late";
+	}
 
-    value = cf->args->elts;
+	value = cf->args->elts;
 
-    file = value[1];
+	file = value[1];
 
-    if (ngx_conf_full_name(cf->cycle, &file, 0) != NGX_OK) {
-        return NGX_CONF_ERROR;
-    }
+	if (ngx_conf_full_name(cf->cycle, &file, 0) != NGX_OK) {
+		return NGX_CONF_ERROR;
+	}
 
-    cln = ngx_pool_cleanup_add(cf->cycle->pool, 0);
-    if (cln == NULL) {
-        return NGX_CONF_ERROR;
-    }
+	cln = ngx_pool_cleanup_add(cf->cycle->pool, 0);
+	if (cln == NULL) {
+		return NGX_CONF_ERROR;
+	}
 
-    handle = ngx_dlopen(file.data);
-    if (handle == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           ngx_dlopen_n " \"%s\" failed (%s)",
-                           file.data, ngx_dlerror());
-        return NGX_CONF_ERROR;
-    }
+	handle = ngx_dlopen(file.data);
+	if (handle == NULL) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+				ngx_dlopen_n " \"%s\" failed (%s)",
+				file.data, ngx_dlerror());
+		return NGX_CONF_ERROR;
+	}
 
-    cln->handler = ngx_unload_module;
-    cln->data = handle;
+	cln->handler = ngx_unload_module;
+	cln->data = handle;
 
-    modules = ngx_dlsym(handle, "ngx_modules");
-    if (modules == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           ngx_dlsym_n " \"%V\", \"%s\" failed (%s)",
-                           &value[1], "ngx_modules", ngx_dlerror());
-        return NGX_CONF_ERROR;
-    }
+	modules = ngx_dlsym(handle, "ngx_modules");
+	if (modules == NULL) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+				ngx_dlsym_n " \"%V\", \"%s\" failed (%s)",
+				&value[1], "ngx_modules", ngx_dlerror());
+		return NGX_CONF_ERROR;
+	}
 
-    names = ngx_dlsym(handle, "ngx_module_names");
-    if (names == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           ngx_dlsym_n " \"%V\", \"%s\" failed (%s)",
-                           &value[1], "ngx_module_names", ngx_dlerror());
-        return NGX_CONF_ERROR;
-    }
+	names = ngx_dlsym(handle, "ngx_module_names");
+	if (names == NULL) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+				ngx_dlsym_n " \"%V\", \"%s\" failed (%s)",
+				&value[1], "ngx_module_names", ngx_dlerror());
+		return NGX_CONF_ERROR;
+	}
 
-    order = ngx_dlsym(handle, "ngx_module_order");
+	order = ngx_dlsym(handle, "ngx_module_order");
 
-    for (i = 0; modules[i]; i++) {
-        module = modules[i];
-        module->name = names[i];
+	for (i = 0; modules[i]; i++) {
+		module = modules[i];
+		module->name = names[i];
 
-        if (ngx_add_module(cf, &file, module, order) != NGX_OK) {
-            return NGX_CONF_ERROR;
-        }
+		if (ngx_add_module(cf, &file, module, order) != NGX_OK) {
+			return NGX_CONF_ERROR;
+		}
 
-        ngx_log_debug2(NGX_LOG_DEBUG_CORE, cf->log, 0, "module: %s i:%ui",
-                       module->name, module->index);
-    }
+		ngx_log_debug2(NGX_LOG_DEBUG_CORE, cf->log, 0, "module: %s i:%ui",
+				module->name, module->index);
+	}
 
-    return NGX_CONF_OK;
+	return NGX_CONF_OK;
 
 #else
 
-    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                       "\"load_module\" is not supported "
-                       "on this platform");
-    return NGX_CONF_ERROR;
+	ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+			"\"load_module\" is not supported "
+			"on this platform");
+	return NGX_CONF_ERROR;
 
 #endif
 }
@@ -1641,15 +1653,15 @@ ngx_load_module(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 #if (NGX_HAVE_DLOPEN)
 
-static void
+	static void
 ngx_unload_module(void *data)
 {
-    void  *handle = data;
+	void  *handle = data;
 
-    if (ngx_dlclose(handle) != 0) {
-        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
-                      ngx_dlclose_n " failed (%s)", ngx_dlerror());
-    }
+	if (ngx_dlclose(handle) != 0) {
+		ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0,
+				ngx_dlclose_n " failed (%s)", ngx_dlerror());
+	}
 }
 
 #endif

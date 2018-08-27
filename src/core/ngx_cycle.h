@@ -122,8 +122,14 @@ typedef struct {
 
 #define ngx_is_init_cycle(cycle)  (cycle->conf_ctx == NULL)
 
-
+/*
+ * @brief	初始化ngx_cycle_t结构
+ * @detail	初始化ngx_cycle_t结构, 解析配置文件, 加载所有模块, 打开监听端口, 初始化进程间通信方式等工作
+ * @param	old_cycle	临时的ngx_cycle_t指针, 仅用于传递配置文件路径等参数
+ * @return	成功返回完整的ngx_cycle_t结构体指针, 失败返回NULL
+ * */
 ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle);
+
 ngx_int_t ngx_create_pidfile(ngx_str_t *name, ngx_log_t *log);
 void ngx_delete_pidfile(ngx_cycle_t *cycle);
 ngx_int_t ngx_signal_process(ngx_cycle_t *cycle, char *sig);
